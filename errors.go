@@ -12,11 +12,11 @@ const (
 )
 
 var (
-	errorsMap = map[int32]Error{
-		NoCode: {},
+	errorsMap = map[int32]*Error{
+		NoCode: nil,
 		InternalCode: {
-			code:    InternalCode,
 			message: InternalMessage,
+			code:    InternalCode,
 		},
 	}
 )
@@ -27,27 +27,41 @@ type Error struct {
 	code    int32
 }
 
-func New(msg string) *Error {
-	return &Error{
+func WithCode(code int32) func(*Error) {
+	return func(e *Error) {
+		e.code = code
+	}
+}
+
+func New(msg string, opts ...func(*Error)) *Error {
+	e := &Error{
 		message: msg,
 		code:    NoCode,
-		detail:  errors.New(msg),
 	}
+	for _, o := range opts {
+		o(e)
+	}
+	return e
 }
 
 func Register(code int32, msg string) *Error {
 	if _, ok := errorsMap[code]; ok {
 		panic(fmt.Sprintf("duplate error code: %d", code))
 	}
-	return &Error{
+	e := &Error{
 		message: msg,
 		code:    code,
-		detail:  errors.New(msg),
 	}
+
+	errorsMap[code] = e
+	return e
 }
 
 func (e *Error) Error() string {
-	return e.detail.Error()
+	if e.detail != nil {
+		return fmt.Sprintf("%s(%d): %s", e.message, e.code, e.detail)
+	}
+	return fmt.Sprintf("%s(%d)", e.message, e.code)
 }
 
 func (e *Error) Code() int32 {
@@ -60,7 +74,7 @@ func (e *Error) Detail() error {
 
 func (e *Error) WithError(err error) error {
 	return &Error{
-		detail:  fmt.Errorf("%s: %w", e.message, err),
+		detail:  err,
 		message: e.message,
 		code:    e.code,
 	}
@@ -68,7 +82,7 @@ func (e *Error) WithError(err error) error {
 
 func (e *Error) WithMessage(msg string) error {
 	return &Error{
-		detail:  fmt.Errorf("%w: %s", e, msg),
+		detail:  errors.New(msg),
 		message: e.message,
 		code:    e.code,
 	}
@@ -90,7 +104,8 @@ func (e *Error) Is(err error) bool {
 	}
 }
 
-func Parse(err error) (target *Error) {
+func Parse(err error) *Error {
+	var target *Error
 	if !errors.As(err, &target) {
 		target = &Error{
 			code:    InternalCode,
@@ -98,9 +113,13 @@ func Parse(err error) (target *Error) {
 			detail:  err,
 		}
 	}
-	return
+	return target
 }
 
 func Is(err, target error) bool {
 	return errors.Is(err, target)
+}
+
+func FromCode(code int32) *Error {
+	return errorsMap[code]
 }
