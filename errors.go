@@ -15,8 +15,8 @@ var (
 	errorsMap = map[int32]*Error{
 		NoCode: nil,
 		InternalCode: {
-			message: InternalMessage,
 			code:    InternalCode,
+			message: InternalMessage,
 		},
 	}
 )
@@ -58,10 +58,14 @@ func Register(code int32, msg string) *Error {
 }
 
 func (e *Error) Error() string {
-	if e.detail != nil {
-		return fmt.Sprintf("%s(%d): %s", e.message, e.code, e.detail)
+	errMsg := e.message
+	if e.code != NoCode && e.code != InternalCode {
+		errMsg = fmt.Sprintf("%s(%d)", e.message, e.code)
 	}
-	return fmt.Sprintf("%s(%d)", e.message, e.code)
+	if e.detail != nil {
+		errMsg = errMsg + ": " + e.detail.Error()
+	}
+	return errMsg
 }
 
 func (e *Error) Code() int32 {
